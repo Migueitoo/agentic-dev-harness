@@ -1,0 +1,87 @@
+{
+  "findthatbook": [
+    {
+      "name": "controller",
+      "task": "Modificar BookDiscoveryController",
+      "expected_code": [
+        {
+          "source": "FindThatBook.API/Controllers/BookDiscoveryController.cs"
+        }
+      ]
+    },
+    {
+      "name": "service",
+      "task": "Agregar validación al servicio de búsqueda de libros",
+      "expected_code": [
+        {
+          "source": "FindThatBook.Application/BookDiscovery/Services/BookDiscoveryService.cs"
+        }
+      ]
+    },
+    {
+      "name": "tests",
+      "task": "Actualizar las pruebas de BookDiscoveryService",
+      "expected_code": [
+        {
+          "source": "FindThatBook.Tests/BookDiscoveryServiceTests.cs"
+        }
+      ]
+    },
+    {
+      "name": "empty_query_bug",
+      "task": "Al buscar un libro con una consulta vacía, la API devuelve un error inesperado",
+      "expected_code": [
+        {
+          "source": "FindThatBook.API/Controllers/BookDiscoveryController.cs",
+          "contains": "BadRequest(\"Query is required.\")"
+        },
+        {
+          "source": "FindThatBook.Application/BookDiscovery/Services/BookDiscoveryService.cs",
+          "contains": "ArgumentException(\"Query is required.\""
+        }
+      ]
+    }
+  ],
+  "harness": [
+    {
+      "name": "context_budget",
+      "task": "El presupuesto de contexto deja pasar fragmentos cuando supera el límite de tokens",
+      "expected_code": [
+        {
+          "source": "src/context_engine/budget.py",
+          "contains": "def apply_context_budget"
+        }
+      ]
+    },
+    {
+      "name": "code_chunking",
+      "task": "Modificar la división de archivos de código en fragmentos con solapamiento",
+      "expected_code": [
+        {
+          "source": "src/context_engine/code_chunking.py",
+          "contains": "def split_code_content"
+        }
+      ]
+    },
+    {
+      "name": "hybrid_weights",
+      "task": "Cambiar los pesos de BM25 y embeddings en la búsqueda híbrida",
+      "expected_code": [
+        {
+          "source": "src/context_engine/hybrid.py",
+          "contains": "BM25_WEIGHT"
+        }
+      ]
+    },
+    {
+      "name": "candidate_diversity",
+      "task": "La búsqueda devuelve demasiados fragmentos del mismo archivo y deja fuera otros archivos relevantes",
+      "expected_code": [
+        {
+          "source": "src/context_engine/engine.py",
+          "contains": "def select_top_items"
+        }
+      ]
+    }
+  ]
+}
