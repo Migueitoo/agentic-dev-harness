@@ -25,6 +25,8 @@ def chunk_code_documents(
                     content=content,
                     language=document.language,
                     project=document.project,
+                    symbol=document.symbol,
+                    kind=document.kind,
                 )
             )
 

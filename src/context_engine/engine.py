@@ -4,6 +4,8 @@ from repository.models import RepositoryInfo
 
 from .budget import apply_context_budget
 from .chunking import chunk_markdown
+from .code_chunking import chunk_code_documents
+from .code_documents import build_code_documents
 from .hybrid import score_items_hybrid
 from .models import ContextBundle, ContextItem
 from .reranking import rerank_items
@@ -18,6 +20,7 @@ MAX_HYBRID_CANDIDATES = 20
 MAX_RERANKED_ITEMS = 5
 
 RERANKED_PRIORITY_START = 99
+CODE_CONTEXT_PRIORITY = 60
 
 
 def build_context(
@@ -38,12 +41,19 @@ def build_context(
 
     instruction_items = build_instruction_context(repository)
 
-    selected_instruction_items = retrieve_instruction_context(
-        instruction_items,
+    code_items = build_code_context(repository)
+
+    retrieval_items = [
+        *instruction_items,
+        *code_items,
+    ]
+
+    selected_retrieval_items = retrieve_context(
+        retrieval_items,
         task,
     )
 
-    items.extend(selected_instruction_items)
+    items.extend(selected_retrieval_items)
 
     selected_items = apply_context_budget(
         items,
@@ -58,7 +68,7 @@ def build_context(
     )
 
 
-def retrieve_instruction_context(
+def retrieve_context(
     items: list[ContextItem],
     task: str | None,
 ) -> list[ContextItem]:
@@ -234,6 +244,41 @@ def build_instruction_context(
                     priority=base_priority,
                 )
             )
+
+    return items
+
+
+def build_code_context(
+    repository: RepositoryInfo,
+) -> list[ContextItem]:
+    documents = build_code_documents(repository)
+
+    code_chunks = chunk_code_documents(documents)
+
+    items = []
+
+    for chunk in code_chunks:
+        project = chunk.project or "Unknown"
+        symbol = chunk.symbol or "Unknown"
+        code_kind = chunk.kind or "Unknown"
+
+        content = (
+            f"Path: {chunk.source}\n"
+            f"Language: {chunk.language}\n"
+            f"Project: {project}\n"
+            f"Symbol: {symbol}\n"
+            f"Kind: {code_kind}\n\n"
+            f"{chunk.content}"
+        )
+
+        items.append(
+            ContextItem(
+                kind="code",
+                source=chunk.source,
+                content=content,
+                priority=CODE_CONTEXT_PRIORITY,
+            )
+        )
 
     return items
 

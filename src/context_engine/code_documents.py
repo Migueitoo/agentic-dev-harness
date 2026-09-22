@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 from repository.models import RepositoryInfo
@@ -7,6 +8,12 @@ from repository.scanner import (
 )
 
 from .models import CodeDocument
+
+C_SHARP_DECLARATION_PATTERN = re.compile(
+    r"\b(?P<kind>class|interface|record|struct|enum)"
+    r"\s+"
+    r"(?P<symbol>[A-Za-z_][A-Za-z0-9_]*)"
+)
 
 
 def build_code_documents(
@@ -31,6 +38,11 @@ def build_code_documents(
         if content is None:
             continue
 
+        symbol, kind = detect_symbol(
+            content,
+            language,
+        )
+
         documents.append(
             CodeDocument(
                 source=relative_source(
@@ -43,6 +55,8 @@ def build_code_documents(
                     file_path,
                     repository.path,
                 ),
+                symbol=symbol,
+                kind=kind,
             )
         )
 
@@ -102,3 +116,21 @@ def find_project_name(
         current_path = current_path.parent
 
     return None
+
+
+def detect_symbol(
+    content: str,
+    language: str,
+) -> tuple[str | None, str | None]:
+    if language != "C#":
+        return None, None
+
+    match = C_SHARP_DECLARATION_PATTERN.search(content)
+
+    if match is None:
+        return None, None
+
+    return (
+        match.group("symbol"),
+        match.group("kind"),
+    )

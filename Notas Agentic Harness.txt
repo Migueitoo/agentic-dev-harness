@@ -1,6 +1,7 @@
 
 CHECKPOINT:
-- 
+- Continuar con lo del mcp
+- Lo del rag no me quedó claro nada
 
 PENDIENTE:
 - Generar los archivos para instalación en cualquier máquina

@@ -23,3 +23,5 @@ class CodeDocument:
     content: str
     language: str
     project: str | None
+    symbol: str | None
+    kind: str | None
