@@ -7,6 +7,7 @@ class ContextItem:
     source: str
     content: str
     priority: int
+    scope: str | None = None
 
 
 @dataclass

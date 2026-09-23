@@ -17,9 +17,10 @@ HYBRID_PRIORITY_MULTIPLIER = 30
 MAX_HYBRID_BOOST = 30
 
 MAX_HYBRID_CANDIDATES = 20
-MAX_RERANKED_ITEMS = 5
+MAX_RERANKED_CODE_ITEMS = 8
+MAX_DOCUMENT_ITEMS = 1
 
-RERANKED_PRIORITY_START = 99
+RERANKED_CODE_PRIORITY_START = 120
 CODE_CONTEXT_PRIORITY = 60
 
 
@@ -75,25 +76,73 @@ def retrieve_context(
     if not task:
         return items
 
-    apply_hybrid_scores(
-        items,
-        task,
+    apply_hybrid_scores(items, task)
+
+    code_items = [item for item in items if item.kind == "code"]
+    instruction_items = [
+        item
+        for item in items
+        if item.kind == "instructions" and is_instruction_file(item.source)
+    ]
+    document_items = [
+        item
+        for item in items
+        if item.kind == "instructions" and not is_instruction_file(item.source)
+    ]
+
+    selected_code = rerank_context_items(code_items, task)
+    selected_code = select_diverse_code_items(
+        selected_code, MAX_RERANKED_CODE_ITEMS
     )
+    apply_reranking_priorities(selected_code)
 
-    hybrid_candidates = select_top_items(
-        items,
-        MAX_HYBRID_CANDIDATES,
-    )
+    selected_documents = select_top_items(document_items, MAX_DOCUMENT_ITEMS)
 
-    reranked_items = rerank_items(
-        task,
-        hybrid_candidates,
-        top_k=MAX_RERANKED_ITEMS,
-    )
+    return [*instruction_items, *selected_code, *selected_documents]
 
-    apply_reranking_priorities(reranked_items)
 
-    return reranked_items
+def is_instruction_file(source: str) -> bool:
+    return source.split("#", 1)[0].upper() in {"AGENTS.MD", "CLAUDE.MD"}
+
+
+def rerank_context_items(
+    items: list[ContextItem], task: str
+) -> list[ContextItem]:
+    if not items:
+        return []
+
+    candidates = select_top_items(items, MAX_HYBRID_CANDIDATES)
+    return rerank_items(task, candidates, top_k=len(candidates))
+
+
+def select_diverse_code_items(
+    ranked_items: list[ContextItem], top_k: int
+) -> list[ContextItem]:
+    if top_k <= 0:
+        return []
+
+    selected = []
+    seen_files = set()
+    seen_scopes = set()
+
+    for distinct_scope in (True, False):
+        for item in ranked_items:
+            file_source = item.source.split("#chunk-", 1)[0]
+            scope = item.scope or file_source
+
+            if file_source in seen_files:
+                continue
+            if distinct_scope and scope in seen_scopes:
+                continue
+
+            selected.append(item)
+            seen_files.add(file_source)
+            seen_scopes.add(scope)
+
+            if len(selected) == top_k:
+                return selected
+
+    return selected
 
 
 def select_top_items(
@@ -138,7 +187,7 @@ def apply_reranking_priorities(
     items: list[ContextItem],
 ) -> None:
     for index, item in enumerate(items):
-        item.priority = RERANKED_PRIORITY_START - index
+        item.priority = RERANKED_CODE_PRIORITY_START - index
 
 
 def build_repository_summary(
@@ -277,6 +326,8 @@ def build_code_context(
                 source=chunk.source,
                 content=content,
                 priority=CODE_CONTEXT_PRIORITY,
+                scope=chunk.project
+                or str(Path(chunk.source.split("#chunk-", 1)[0]).parent),
             )
         )
 
@@ -289,10 +340,10 @@ def context_file_priority(
     filename = filename.upper()
 
     if filename == "AGENTS.MD":
-        return 100
+        return 130
 
     if filename == "CLAUDE.MD":
-        return 100
+        return 130
 
     if filename == "README.MD":
         return 70

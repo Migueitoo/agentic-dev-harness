@@ -1,6 +1,6 @@
 
 CHECKPOINT:
-- Continuar con lo del mcp
+- Seguir mejorando el flujo
 - Lo del rag no me quedó claro nada
 
 PENDIENTE:

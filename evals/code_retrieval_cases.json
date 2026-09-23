@@ -1,6 +1,18 @@
 {
   "findthatbook": [
     {
+      "name": "new_endpoint",
+      "task": "Agregar un nuevo endpoint para buscar libros",
+      "expected_code": [
+        {
+          "source": "FindThatBook.API/Controllers/BookDiscoveryController.cs"
+        },
+        {
+          "source": "FindThatBook.Application/BookDiscovery/Services/BookDiscoveryService.cs"
+        }
+      ]
+    },
+    {
       "name": "controller",
       "task": "Modificar BookDiscoveryController",
       "expected_code": [

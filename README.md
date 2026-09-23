@@ -30,6 +30,9 @@ El harness debe ayudar a:
 
 \- mantener independencia del modelo utilizado.
 
+Servidor MCP local: consulta [docs/MCP.md](docs/MCP.md) para configurar y
+probar la herramienta `search_repository_context`.
+
 
 
 \## Primera etapa
