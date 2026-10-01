@@ -4,37 +4,34 @@ import xml.etree.ElementTree as ET
 from ..models import DotNetProjectInfo, PackageReferenceInfo
 
 
+def _elements(root: ET.Element, name: str) -> list[ET.Element]:
+    return [element for element in root.iter() if element.tag.rsplit("}", 1)[-1] == name]
+
+
+def _first_text(root: ET.Element, *names: str) -> str | None:
+    for name in names:
+        for element in _elements(root, name):
+            if element.text and element.text.strip():
+                return element.text.strip()
+    return None
+
+
 def inspect_dotnet_project(file_path: Path) -> DotNetProjectInfo:
     tree = ET.parse(file_path)
     root = tree.getroot()
 
     sdk = root.attrib.get("Sdk")
 
-    target_framework_element = root.find(".//TargetFramework")
-    target_framework = (
-        target_framework_element.text if target_framework_element is not None else None
-    )
-
-    is_test_project_element = root.find(".//IsTestProject")
-
-    is_test_project = (
-        is_test_project_element is not None
-        and is_test_project_element.text is not None
-        and is_test_project_element.text.lower() == "true"
-    )
-
-    if is_test_project:
-        project_type = "test"
-    elif sdk == "Microsoft.NET.Sdk.Web":
-        project_type = "web"
-    else:
-        project_type = "library"
+    target_framework = _first_text(root, "TargetFramework", "TargetFrameworks", "TargetFrameworkVersion")
+    is_test_project = (_first_text(root, "IsTestProject") or "").lower() == "true"
 
     package_references = []
 
-    for package_reference in root.findall(".//PackageReference"):
+    for package_reference in _elements(root, "PackageReference"):
         package_name = package_reference.attrib.get("Include")
         package_version = package_reference.attrib.get("Version")
+        if package_version is None:
+            package_version = _first_text(package_reference, "Version")
 
         if package_name:
             package_references.append(
@@ -48,6 +45,18 @@ def inspect_dotnet_project(file_path: Path) -> DotNetProjectInfo:
 
     package_names = {package.name.lower() for package in package_references}
 
+    if is_test_project or package_names.intersection({"microsoft.net.test.sdk", "xunit", "nunit", "mstest.testframework"}):
+        project_type = "test"
+        is_test_project = True
+    elif sdk == "Microsoft.NET.Sdk.Web":
+        project_type = "web"
+    elif sdk == "Microsoft.NET.Sdk.Worker":
+        project_type = "worker"
+    elif "worker" in file_path.stem.casefold():
+        project_type = "worker candidate (project name)"
+    else:
+        project_type = "not determined"
+
     if "xunit" in package_names:
         test_framework = "xUnit"
     elif "nunit" in package_names:
@@ -57,7 +66,7 @@ def inspect_dotnet_project(file_path: Path) -> DotNetProjectInfo:
 
     project_references = []
 
-    for project_reference in root.findall(".//ProjectReference"):
+    for project_reference in _elements(root, "ProjectReference"):
         include = project_reference.attrib.get("Include")
 
         if include:
@@ -73,30 +82,3 @@ def inspect_dotnet_project(file_path: Path) -> DotNetProjectInfo:
         project_references=project_references,
         package_references=package_references,
     )
-
-
-def detect_dotnet_capabilities(
-    projects: list[DotNetProjectInfo],
-) -> list[str]:
-    capabilities = set()
-
-    for project in projects:
-        if project.is_test_project:
-            capabilities.add("Testing")
-
-        if project.test_framework:
-            capabilities.add(project.test_framework)
-
-        for package in project.package_references:
-            package_name = package.name.lower()
-
-            if package_name.startswith("modelcontextprotocol"):
-                capabilities.add("MCP")
-
-            if package_name.startswith("swashbuckle"):
-                capabilities.add("Swagger / OpenAPI")
-
-            if package_name.startswith("coverlet"):
-                capabilities.add("Code Coverage")
-
-    return sorted(capabilities)

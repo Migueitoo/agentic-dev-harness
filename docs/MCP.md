@@ -1,66 +1,64 @@
-# Servidor MCP local
+# Servidor MCP de mapeo
 
-El harness expone una herramienta de solo lectura llamada
-`search_repository_context`. Recibe la ruta absoluta de un repositorio local,
-una tarea y un presupuesto aproximado de tokens. Devuelve los elementos del
-`ContextBundle` existente; no cambia el ranking ni modifica archivos del repo.
-
-## Preparación
-
-Instala las dependencias con el Python que usará el cliente MCP:
+`src/mcp_server.py` inicia un servidor MCP local por `stdio` y registra una sola
+herramienta:
 
 ```text
-python -m pip install -r requirements.txt
+create_repository_map(repo_path: str)
 ```
 
-En Windows, puedes usar `py` en lugar de `python`. La primera consulta con una
-tarea puede descargar los modelos de embeddings y reranking si aún no están
-en la caché local. Para uso sin conexión, precárgalos antes.
+`repo_path` debe ser la ruta absoluta a la **raíz** de un repositorio Git. Una
+llamada procesa un repositorio; para mapear todos los proyectos de una carpeta,
+el agente debe enumerar sus repositorios Git y llamar la herramienta por cada
+uno. La herramienta escribe documentación en el repositorio elegido, por lo
+que el cliente MCP necesita permiso de escritura allí.
 
-## Prueba local
+## Resultado y archivos
 
-Desde la raíz del harness:
+El resultado incluye nombre y ruta del repositorio, rama y commit locales,
+cantidad de archivos inventariados, proyectos detectados, advertencias y la
+lista `changed_files`. El servidor escribe solo estos archivos de la raíz:
 
-```text
-python scripts/smoke_mcp.py --repo "RUTA_ABSOLUTA_DEL_REPO" --task "Describir una tarea de desarrollo"
+| Archivo | Acción |
+| --- | --- |
+| `REPOSITORY_MAP.md` | Crea o actualiza el inventario generado. Rechaza un mapa existente que no tenga su marcador de generación. |
+| `AGENTS.md` | Crea o agrega una referencia acotada al mapa; conserva las instrucciones humanas. |
+| `CLAUDE.md` | Hace lo mismo para agentes que consultan este archivo. |
+
+Las llamadas repetidas son idempotentes cuando el repositorio no ha cambiado.
+El mapeo lee archivos versionados y nuevos no ignorados, hasta 50 000 archivos,
+y limita la lectura individual de manifiestos a 512 KiB. Excluye directorios de
+compilación y dependencias instaladas; no copia valores de configuración ni
+credenciales. Un proyecto, paquete o punto de entrada declarado es evidencia
+estática, no una afirmación sobre el ambiente desplegado.
+
+## Ejecución
+
+Requiere Python 3.11+, Git y `mcp>=2.2,<3`. Un entorno virtual no es obligatorio.
+El comando del servidor es el intérprete Python con `mcp` instalado y su
+argumento es la ruta absoluta de `src/mcp_server.py`. En esta instalación, la
+configuración MCP existente apunta a `.venv\Scripts\python.exe`; conserva ese
+entorno o ajusta la ruta del intérprete al cambiar de instalación. Reinicia el
+cliente MCP después de modificar el servidor para actualizar la lista de
+herramientas.
+
+Para inspeccionar el resultado sin escribir en un repositorio:
+
+```powershell
+& .\.venv\Scripts\python.exe src\main.py --repo 'C:\Repos\MiProyecto'
 ```
 
-El script lanza el servidor como subproceso `stdio`, descubre la herramienta,
-la llama y muestra únicamente los tipos y rutas de los elementos recibidos.
-No imprime el contenido del código recuperado.
+Para escribir los archivos sin cliente MCP:
 
-## Configuración en un cliente MCP
-
-Configura un servidor local de transporte `stdio` con estos dos valores:
-
-```text
-command = RUTA_ABSOLUTA_DEL_PYTHON_CON_DEPENDENCIAS
-args    = [RUTA_ABSOLUTA_DEL_HARNESS/src/mcp_server.py]
+```powershell
+& .\.venv\Scripts\python.exe src\main.py --repo 'C:\Repos\MiProyecto' --write
 ```
 
-Para averiguar la ruta exacta de Python:
+Para probar la herramienta MCP sin modificar proyectos reales:
 
-```text
-python -c "import sys; print(sys.executable)"
+```powershell
+& .\.venv\Scripts\python.exe scripts\smoke_mcp.py
 ```
 
-En Windows también puedes ejecutar ese comando con `py`. Cada cliente tiene
-su propio formato de configuración, pero el comando y el argumento son los
-mismos. No fijes aquí una ruta del repositorio de trabajo: se pasa en cada
-llamada como `repo_path`, lo que permite usar el servidor con repositorios
-distintos.
-
-La herramienta acepta:
-
-- `repo_path`: ruta absoluta al repositorio, en la máquina donde corre el servidor;
-- `task`: descripción no vacía de la tarea;
-- `max_tokens`: presupuesto aproximado positivo, por defecto 2000.
-
-El resultado contiene `repository_name`, `task`, `max_tokens` e `items`. Cada
-item incluye `kind`, `source`, `priority` y `content`. `priority` es una
-prioridad interna, no una probabilidad ni una garantía de relevancia.
-
-El transporte `stdio` no abre un servidor de red. Aun así, el cliente que
-invoque la herramienta recibirá fragmentos del repositorio: úsalo únicamente
-con clientes y repositorios autorizados. Las reglas de seguridad y exclusión
-de archivos sensibles todavía son una fase pendiente del harness.
+El smoke crea un repositorio Git temporal, comprueba que solo está registrada
+`create_repository_map`, la invoca y verifica los tres archivos documentales.

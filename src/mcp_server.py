@@ -1,71 +1,34 @@
-from pathlib import Path
+"""MCP entry point for durable, source-backed repository maps."""
+
+from __future__ import annotations
+
 from typing import Any
 
 from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
-from context_engine.engine import DEFAULT_CONTEXT_BUDGET, build_context
-from repository.scanner import scan_repository
+from repository.mapping import map_repository
 
 
 mcp = MCPServer(
     "agentic-dev-harness",
-    description="Read-only context retrieval for local source repositories.",
+    description="Inspect a local Git repository and maintain its agent-facing map.",
 )
 
 
 @mcp.tool()
-def search_repository_context(
-    repo_path: str,
-    task: str,
-    max_tokens: int = DEFAULT_CONTEXT_BUDGET,
-) -> dict[str, Any]:
-    """Retrieve relevant repository context for a development task.
+def create_repository_map(repo_path: str) -> dict[str, Any]:
+    """Map one local Git repository and write REPOSITORY_MAP.md.
 
-    repo_path must be an absolute path on the machine running this server.
-    Results are best-effort context, not a guarantee that every relevant file
-    was found. This tool reads the repository and does not modify it.
+    Also creates or updates a short REPOSITORY_MAP.md reference in the root
+    AGENTS.md and CLAUDE.md files. Existing instructions are preserved. Pass the
+    absolute repository root; invoke once per repository. This tool changes only
+    those three documentation files in the selected repository, never source code.
     """
-    if not repo_path.strip():
-        raise ToolError("repo_path is required")
-
-    repository_path = Path(repo_path).expanduser()
-
-    if not repository_path.is_absolute():
-        raise ToolError("repo_path must be an absolute path")
-
-    repository_path = repository_path.resolve()
-
-    if not repository_path.is_dir():
-        raise ToolError(f"Repository directory does not exist: {repository_path}")
-
-    if not task.strip():
-        raise ToolError("task is required")
-
-    if max_tokens <= 0:
-        raise ToolError("max_tokens must be greater than zero")
-
-    repository = scan_repository(repository_path)
-    bundle = build_context(
-        repository=repository,
-        task=task.strip(),
-        max_tokens=max_tokens,
-    )
-
-    return {
-        "repository_name": bundle.repository_name,
-        "task": bundle.task,
-        "max_tokens": bundle.max_tokens,
-        "items": [
-            {
-                "kind": item.kind,
-                "source": item.source,
-                "priority": item.priority,
-                "content": item.content,
-            }
-            for item in bundle.items
-        ],
-    }
+    try:
+        return map_repository(repo_path)
+    except (OSError, ValueError) as exc:
+        raise ToolError(str(exc)) from exc
 
 
 if __name__ == "__main__":

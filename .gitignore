@@ -2,3 +2,9 @@
 __pycache__/
 *.py[cod]
 *$py.class
+
+# Virtual environments
+.venv/
+
+# Recoverable snapshot of pre-cleanup files
+.cleanup-backup.zip
